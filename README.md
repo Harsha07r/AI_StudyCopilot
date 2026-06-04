@@ -80,3 +80,34 @@ Searchable
 
 VectorStore:
 A vector store indexes and stores embeddings, enabling efficient similarity search so that the most relevant chunks can be retrieved during a RAG workflow.
+
+
+-----------------------------------------------------
+               DAY 1 ---------------- DAY 6 
+What You've Implemented So Far
+Backend & AI Integration
+Built a MERN-based AI application architecture with separate frontend and backend services.
+Integrated Groq LLM API for fast AI-powered responses.
+Configured environment variables and API management using dotenv.
+
+Document Processing Pipeline
+Implemented PDF Upload functionality using Multer.
+Built a document ingestion pipeline using LangChain PDFLoader to extract text from uploaded PDFs.
+Converted PDFs into LangChain Document objects for downstream processing.
+
+Text Chunking
+Implemented RecursiveCharacterTextSplitter for document chunking.
+Configured:
+chunkSize
+chunkOverlap
+Optimized chunking to preserve context while preparing documents for retrieval.
+
+Embeddings
+Generated semantic embeddings using the all-MiniLM-L6-v2 transformer model.
+Converted text chunks into 384-dimensional vector representations.
+Enabled semantic search, allowing retrieval based on meaning rather than exact keyword matching.
+
+Vector Store & Retrieval Foundation
+Implemented a Memory Vector Store to store document chunks and their embeddings.
+Indexed embeddings for efficient similarity search.
+Built the foundation of a Retrieval-Augmented Generation (RAG) system by enabling retrieval of the most relevant chunks based on user queries.
