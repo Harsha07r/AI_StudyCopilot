@@ -14,15 +14,21 @@ from "../services/customEmbeddings.js";
 
 const router = express.Router();
 
-router.get(
+router.post(
   "/store-pdf",
   async (req, res) => {
 
     try {
 
+      const { fileName } = req.body;
+
+      if (!fileName) {
+        return res.status(400).json({ error: "fileName is required" });
+      }
+
       const docs =
         await loadPDF(
-          "uploads/1780323039193-Application Number.pdf"
+          `uploads/${fileName}`
         );
 
       const chunks =

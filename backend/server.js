@@ -9,6 +9,7 @@ import embeddingRoutes from "./routes/embeddingRoutes.js";
 dotenv.config();
 import vectorStoreRoutes
 from "./routes/vectorStoreRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 
 const app = express();
 app.use(cors());
@@ -24,10 +25,11 @@ app.use("/", uploadRoutes);
 app.use("/", pdfRoutes);
 app.use("/", embeddingRoutes);
 app.use("/", vectorStoreRoutes);
+app.use("/", chatRoutes);
+
 app.get("/",(req,res)=>{
     res.send("AI_StudyCoplit Backend Server is running");
 })
-
 app.post("/chat",async (req,res)=>{
     try{
         const {question} =req.body;

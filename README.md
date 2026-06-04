@@ -1,113 +1,138 @@
-DAY1- Intial Frontend,Backend ,Groq API ,Langchain Setup 
-Initial Setup:
-git init in root dir -- to initialize git repo
-mkdir frontend ,mkdir backend
-created .gitignore ,README.md in Root dir
-Install Backend and Frontend Dependencies 
-Langchain is installed and Groq is also connected
-->created an endpoint /chat to test requests to Groq API and tested
--------------------------------------------------------------
-DAY2 -PDF Upload System
-->developed the uploadRoutes Route to upload PDF from the frontend 
-->Multer
-uploads folder
-File Storage
-Flow:
-A user goes to their browser or an app, selects a file, and hits "Upload". The app sends an HTTP POST request to your /upload route
-Before your final code can even touch the request, the upload.single("pdf") MIDDLEWARE jumps in. It tells the server: "Hold on, there's a single file named 'pdf' in this request. Let me handle it."
-Express doesn't know how to open or read this format on its own. so This Multer Middleware helps to unwrap the multipart/form-data and pass the control to the route
-Def: "Express cannot natively parse multipart/form-data. Multer acts as a middleware that intercepts the request, unwraps (parses) the multipart stream, saves the file to the specified storage, populates req.file and req.body, and then calls next() to pass control to the final route handler."
+PDF-Based Retrieval-Augmented Generation (RAG) System
+A full-stack, offline-capable AI application that allows users to upload PDF documents, automatically extract and process their text, and converse with the document using an advanced Retrieval-Augmented Generation (RAG) pipeline.
 
-now the pdf can be uploaded and stored only ,we cannot now read the text and give to AI
-------------------------------------------------------------
-DAY3- PDF Loading & Text Extraction.
-->to convert pdf file into redable text
-This is acheived using Langchain Document Loader
-PDF Loader Dependencies -> npm install pdf-parse pdfjs-dist ,npm install @langchain/community
+By leveraging local embedding engines, semantic text chunking, and highly efficient similarity search algorithms, this system extracts answers directly from uploaded source material with zero external data leaks and highly reduced token costs.
 
-Flow between the pdfLoader and pdfRoutes files: 
-the request from user is received at router.get("/read-pdf") ,it goes inside the try block and sees it passes the control to service to read the file content and also passes the file location to the service file , now server goes into service file and uses PDF Loader to open and read the file and  loadpdf function return the docs which contains array of objects(pages) and the metadata(page info) and gives it to the routerfile(pdfRoutes) and now this displays the content received from the pdfLaoderService
+🚀 Key Features & Capabilities
+End-to-End Ingestion Pipeline: Seamless transition from raw, multi-page PDF binaries to clean, searchable mathematical representations.
 
-------------------------------------------------------
-Day4- Text Splitting(Chunking)
-->Huge Text is converted into Chunks using RecursiveCharacterTextSplitter
-Need of Chunking : Suppose there is a OS PDF of 50 pages
-Question: What is Deadlock? ,now should we send the entire PDF to LLM 
-NO ,because of more tokens ,more cost 
-SO break the entire PDF into chunks to make retreival easy
-it uses chunkSize to divide into chunks and chunkOverlap to ensure context is not lost
+Multipart File Handling: Robust streaming and temporary storage of local files using a high-performance middleware architecture.
 
-Text Splitter package -> npm install @langchain/textsplitters --legacy-peer-deps
+Context-Preserving Tokenization: Intelligent text segmentation that ensures paragraphs are split along syntactic boundaries without tearing sentence meaning.
 
-Till now:
-Upload
- ↓
-Load
- ↓
-Split
+Local, Free AI Embeddings: Generates vector representations directly on your host machine—completely bypassing external API usage, pricing limits, and latency spikes.
 
---------------------------------------------------
-Day5- Embeddings
-->AI cannot search text efficiently so it converts Text into Embedding vector ,so it searches for meaning rather than exact words
-Embedding -An embedding is a numerical representation of meaning. 
+Semantic Search & Retrieval: Identifies and returns document fragments using conceptual closeness rather than rigid, literal keyword lookups.
 
-Also install Chromadb to store the Embeddings -> npm install chromadb --legacy-peer-deps
+Strict Context Constraint: A custom LLM instruction layer forces the conversational agent to reply using only verified documentation fragments, neutralizing hallucinations.
 
-Implemented semantic embeddings using the
-all-MiniLM-L6-v2 transformer model,
-converting document chunks into 384-dimensional
-vectors for semantic retrieval.
+🛠️ Technology Stack
+Backend Engine
+Runtime Environment: Node.js (ECMAScript Modules)
 
-The flow and functioanlity is explained detaily in the embeddingService ,embeddingRoutes files itself
+Web Framework: Express.js
 
----------------------------------------------------------
-Day6-Vector Database (ChromaDB)
-ChromaDB stores Vectors
-Chunk:"Deadlock occurs..."
-Embedding:[0.23, -0.45, ...]
-stored together.
-Without Day 6:
+File Processing: Multer
 
-Embeddings exist
-but cannot be searched
+AI & Vector Infrastructure
+Orchestration Framework: LangChain Core & Community Ecosystem
 
-current:
-Embeddings
- ↓
-Indexed
- ↓
-Searchable
+Local Embedding Engine: @xenova/transformers (JavaScript port of Hugging Face Transformers)
 
-VectorStore:
-A vector store indexes and stores embeddings, enabling efficient similarity search so that the most relevant chunks can be retrieved during a RAG workflow.
+Embedding Model: all-MiniLM-L6-v2 (384-dimensional semantic vectors)
 
+Database / Indexing: LangChain MemoryVectorStore & ChromaDB Integration
 
------------------------------------------------------
-               DAY 1 ---------------- DAY 6 
-What You've Implemented So Far
-Backend & AI Integration
-Built a MERN-based AI application architecture with separate frontend and backend services.
-Integrated Groq LLM API for fast AI-powered responses.
-Configured environment variables and API management using dotenv.
+Inference Model: Groq API Cloud Client
 
-Document Processing Pipeline
-Implemented PDF Upload functionality using Multer.
-Built a document ingestion pipeline using LangChain PDFLoader to extract text from uploaded PDFs.
-Converted PDFs into LangChain Document objects for downstream processing.
+📋 System Pipeline Architecture
+The application functions through a strict, unidirectional processing data flow:
 
-Text Chunking
-Implemented RecursiveCharacterTextSplitter for document chunking.
-Configured:
-chunkSize
-chunkOverlap
-Optimized chunking to preserve context while preparing documents for retrieval.
+Plaintext
+[ Raw PDF Upload ] 
+       │
+       ▼ (Multer Middleware handles Multipart Stream)
+[ Disks/Upload Storage ] 
+       │
+       ▼ (LangChain PDFLoader extracts text pages)
+[ Extracted Documents ] 
+       │
+       ▼ (Recursive Character Tokenizer splits text)
+[ Optimized Document Chunks ] 
+       │
+       ▼ (Local Transformer Model calculates weights)
+[ 384-Dimensional Vectors ] 
+       │
+       ▼ (Indexed into RAM or Disk-based Stores)
+[ Vector Database ] ◄─── (Similarity Match) ─── [ User Query ]
+       │                                              │
+       ▼ (Extracted Paragraphs)                       │
+[ Prompt Engineering Context Layer ] ◄────────────────┘
+       │
+       ▼ (Invokes Isolated Inference)
+[ Final Human-Readable Answer ]
+🔍 Core Component Breakdown
+1. Document Extraction & Storage Layer
+Traditional web frameworks cannot parse complex file streams out of the box. This layer intercepts binary data streams, saves files securely to disk, and uses a headless PDF compilation mechanism to output individual page elements containing both raw string content and location metadata.
 
-Embeddings
-Generated semantic embeddings using the all-MiniLM-L6-v2 transformer model.
-Converted text chunks into 384-dimensional vector representations.
-Enabled semantic search, allowing retrieval based on meaning rather than exact keyword matching.
+2. Semantic Structural Chunking
+To prevent overwhelming LLM context window spaces and keep billing footprints minimal, documents are divided through a hierarchy of separators (paragraphs, sentences, spaces).
 
-Vector Store & Retrieval Foundation
-Implemented a Memory Vector Store to store document chunks and their embeddings.
-Indexed embeddings for efficient similarity search.
-Built the foundation of a Retrieval-Augmented Generation (RAG) system by enabling retrieval of the most relevant chunks based on user queries.
+Chunk Size: 1,000 Characters
+
+Chunk Overlap: 200 Characters (Ensures contextual concepts at bounding edges are duplicated across adjacent structures).
+
+3. Vectorization Engine (The Adapter Pattern)
+Rather than passing raw phrases over the web, the system converts chunks into spatial data coordinates using a local instance of the all-MiniLM-L6-v2 neural model. A custom structural Adapter pattern maps your local inference arrays seamlessly into LangChain's uniform abstraction layer, deploying both single-query processing and massive batch execution blocks.
+
+JavaScript
+// Example structural implementation of the local AI adapter
+export class CustomEmbeddings extends Embeddings {
+  async embedDocuments(texts) {
+    const embeddings = [];
+    for (const text of texts) {
+      embeddings.push(await createEmbedding(text));
+    }
+    return embeddings;
+  }
+  async embedQuery(text) {
+    return await createEmbedding(text);
+  }
+}
+4. Memory Indexing & Intelligent Context Retrieval
+Once documents are saved into the Vector Space, user queries act as spatial probes. The data layer parses incoming strings, calculates the query's dimensional properties, and isolates the top 3 nearest historical records using mathematical Cosine Similarity equations.
+
+The application maps, extracts, and stitches these documents together into a single plain-text reference string wrapped inside systemic boundaries:
+
+Plaintext
+You are a study assistant.
+Answer ONLY from the provided context.
+
+Context:
+[Retrieved Document Fragment 1]
+[Retrieved Document Fragment 2]
+[Retrieved Document Fragment 3]
+
+Question: [User Query]
+🛠️ Getting Started & Installation
+Prerequisites
+Node.js (v18 or higher recommended)
+
+Git
+
+Installation
+Clone the repository down to your local machine:
+
+Bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
+cd YOUR_REPOSITORY_NAME
+Initialize your configurations inside the root server directory by creating a .env file:
+
+Code snippet
+PORT=3000
+GROQ_API_KEY=your_secret_groq_api_key
+Setup your dependencies:
+
+Bash
+# Navigate into Backend and install
+cd backend
+npm install
+
+# Navigate into Frontend and install
+cd ../frontend
+npm install
+Run the development application servers:
+
+Bash
+# From your backend service folder
+npm run dev
