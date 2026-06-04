@@ -101,9 +101,7 @@ function App() {
         />
         <AnswerBox answer={answer} />
 
-        <footer className="footer">
-          Built with React <span>•</span> LangChain <span>•</span> Groq <span>•</span> RAG
-        </footer>
+      
       </div>
     </>
   );
