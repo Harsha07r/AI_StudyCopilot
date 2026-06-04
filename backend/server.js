@@ -5,7 +5,10 @@ import dotenv from 'dotenv';
 import { ChatGroq } from "@langchain/groq";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import pdfRoutes from "./routes/pdfRoutes.js";
+import embeddingRoutes from "./routes/embeddingRoutes.js";
 dotenv.config();
+import vectorStoreRoutes
+from "./routes/vectorStoreRoutes.js";
 
 const app = express();
 app.use(cors());
@@ -19,7 +22,8 @@ const model = new ChatGroq({
 
 app.use("/", uploadRoutes);
 app.use("/", pdfRoutes);
-
+app.use("/", embeddingRoutes);
+app.use("/", vectorStoreRoutes);
 app.get("/",(req,res)=>{
     res.send("AI_StudyCoplit Backend Server is running");
 })
