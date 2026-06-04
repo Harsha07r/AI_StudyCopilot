@@ -32,7 +32,7 @@ function App() {
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const BACKEND_URL = "https://ai-studycopilot.onrender.com";
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
   const handleUpload = async () => {
     if (!pdf) {
