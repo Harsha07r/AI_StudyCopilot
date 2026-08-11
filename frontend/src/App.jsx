@@ -68,15 +68,64 @@ function App() {
     }
   };
 
-  const handleAsk = async () => {
+ const handleAsk = async () => {
     if (!question) return;
 
     try {
-      setLoading(true);
-      const res = await axios.post(`${BACKEND_URL}/chat`, { question });
-      setAnswer(res.data.answer);
+      setLoading(true); // Turn on the loading state
+      setAnswer(""); // Clear the previous answer
+
+      // 1. Use native fetch to keep the connection open for the stream
+      const response = await fetch(`${BACKEND_URL}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ question }),
+      });
+
+      if (!response.ok) throw new Error("Chat request failed");
+
+      // 2. Set up the stream reader
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      setLoading(false); // Turn off the loading spinner the second the first word arrives
+
+      // 3. Loop through the incoming data packets
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break; // The stream is completely finished
+        }
+
+        // Decode the raw bytes into text
+        const chunk = decoder.decode(value, { stream: true });
+
+        // 4. Parse the Server-Sent Events format (data: {...}\n\n)
+        const lines = chunk.split("\n\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataString = line.replace("data: ", "");
+            
+            if (dataString === "[DONE]") {
+              break; // Backend signaled the end
+            }
+            
+            try {
+              const parsedData = JSON.parse(dataString);
+              // 5. Append the new word to the answer state instantly
+              setAnswer((prev) => prev + parsedData.text);
+            } catch (e) {
+              console.error("Error parsing stream data:", e);
+            }
+          }
+        }
+      }
     } catch (error) {
-      console.log(error);
+      console.error("Chat error:", error);
+      setAnswer("An error occurred while generating the response.");
     } finally {
       setLoading(false);
     }
