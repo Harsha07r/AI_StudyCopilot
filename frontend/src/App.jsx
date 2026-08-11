@@ -30,7 +30,12 @@ function App() {
   const [pdf, setPdf] = useState(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  
+  // State for the AI Chat loading
   const [loading, setLoading] = useState(false);
+  
+  // NEW: State for the PDF Upload process
+  const [isUploading, setIsUploading] = useState(false);
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -41,14 +46,25 @@ function App() {
     }
 
     try {
+      setIsUploading(true); // 1. Turn on the multi-stage loading UI
+
       const formData = new FormData();
       formData.append("pdf", pdf);
+      
       const uploadRes = await axios.post(`${BACKEND_URL}/upload`, formData);
       const { fileName } = uploadRes.data;
+      
       await axios.post(`${BACKEND_URL}/store-pdf`, { fileName });
-      alert("PDF uploaded successfully");
+      
+      // Optional: You can remove this alert now since the UI will naturally 
+      // stop showing the loading state, which implies success.
+      // alert("PDF uploaded successfully"); 
+      
     } catch (error) {
       console.log(error);
+      alert("Upload failed. Please check your connection and try again.");
+    } finally {
+      setIsUploading(false); // 2. Turn off the loading UI when finished (success or fail)
     }
   };
 
@@ -92,7 +108,14 @@ function App() {
           ))}
         </div>
 
-        <PdfUpload pdf={pdf} setPdf={setPdf} handleUpload={handleUpload} />
+        {/* 3. Pass the isUploading state down to the child component! */}
+        <PdfUpload 
+          pdf={pdf} 
+          setPdf={setPdf} 
+          handleUpload={handleUpload} 
+          isUploading={isUploading} 
+        />
+        
         <ChatBox
           question={question}
           setQuestion={setQuestion}
@@ -100,8 +123,6 @@ function App() {
           loading={loading}
         />
         <AnswerBox answer={answer} />
-
-      
       </div>
     </>
   );
