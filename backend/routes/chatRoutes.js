@@ -1,38 +1,19 @@
 import express from "express";
-
-import { retrieveRelevantChunks }
-from "../services/retrieverService.js";
-
-import { model }
-from "../config/llm.js";
+import { retrieveRelevantChunks } from "../services/retrieverService.js";
+import { model } from "../config/llm.js";
 
 const router = express.Router();
 
-router.post(
-  "/chat",
-  async (req, res) => {
+router.post("/chat", async (req, res) => {
+  try {
+    const { question } = req.body;
 
-    try {
+    // 1. Retrieve & Build Context (Unchanged)
+    const chunks = await retrieveRelevantChunks(question);
+    const context = chunks.map(doc => doc.pageContent).join("\n\n");
 
-      const { question } =
-        req.body;
-
-      const chunks =
-        await retrieveRelevantChunks(
-          question
-        );
-
-      const context =
-        chunks
-          .map(
-            doc =>
-              doc.pageContent
-          )
-          .join("\n\n");
-
-      const prompt = `
+    const prompt = `
 You are a study assistant.
-
 Answer ONLY from the provided context.
 
 Context:
@@ -41,52 +22,39 @@ ${context}
 Question:
 ${question}
 `;
-  console.log("QUESTION:", question);
 
-console.log("RETRIEVED CHUNKS:");
-console.log(chunks);
+    // 2. Set headers for Server-Sent Events (SSE)
+    // This tells the frontend: "Don't close the connection, data is coming in pieces!"
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
 
-console.log("CONTEXT:");
-console.log(context);
+    // 3. Swap .invoke() for .stream()
+    const stream = await model.stream(prompt);
 
-console.log("PROMPT:");
-console.log(prompt);
-      const response =
-        await model.invoke(
-          prompt
-        ); //invokes groq model with the prompt
-
-      res.json({
-
-        answer:
-          response.content,
-
-        retrievedChunks:
-          chunks.length,
-
-      });
-
-    } catch (error) {
-
-      console.log(error);
-
-      res.status(500).json({
-        error:
-          "Chat failed",
-      });
-
+    // 4. Loop through the stream and send chunks to the frontend instantly
+    for await (const chunk of stream) {
+      if (chunk.content) {
+        // We wrap the text in a specific SSE format: "data: {...}\n\n"
+        res.write(`data: ${JSON.stringify({ text: chunk.content })}\n\n`);
+      }
     }
 
+    // 5. Tell the frontend the stream is completely finished
+    res.write(`data: [DONE]\n\n`);
+    res.end();
+
+  } catch (error) {
+    console.error("Streaming Error:", error);
+    
+    // If the error happens before we start streaming, send a standard 500
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Chat failed" });
+    } else {
+      // If it fails mid-stream, just close the connection
+      res.end();
+    }
   }
-);
+});
 
 export default router;
-
-// const chunks = await retrieveRelevantChunks(question);
-// const context = chunks
-//   .map(doc => doc.pageContent)
-//   .join("\n\n");
-
-// retrieveRelevantChunks: You pass the user's question to the service you built in the previous step. It searches the memory database and returns the top 3 most relevant PDF chunks.
-
-// map and join: The database gives you an array of complex objects. This code strips away the metadata and grabs just the raw text (pageContent). It then joins those 3 paragraphs together, separated by double newlines (\n\n), creating one solid wall of reference text.
