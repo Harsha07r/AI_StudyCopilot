@@ -30,6 +30,13 @@ app.use("/", chatRoutes);
 app.get("/",(req,res)=>{
     res.send("AI_StudyCoplit Backend Server is running");
 })
+
+// Add this near your other route definitions
+app.get('/ping', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date() });
+});
+
+
 app.post("/chat",async (req,res)=>{
     try{
         const {question} =req.body;
