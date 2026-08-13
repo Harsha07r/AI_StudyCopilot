@@ -2,13 +2,16 @@ import express from "express";
 import multer from "multer";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+
+// We require the package, and safely "unwrap" the default function if Node hid it inside an object
+const pdfParseRaw = require("pdf-parse");
+const pdfParse = pdfParseRaw.default || pdfParseRaw;
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
 import { PineconeStore } from "@langchain/pinecone";
 import { Pinecone } from "@pinecone-database/pinecone";
 
-const router = express.Router();
+const router = express.Router();cd ..
 
 // 1. Configure Multer to store uploaded files in RAM (No disk I/O!)
 const upload = multer({ storage: multer.memoryStorage() });
