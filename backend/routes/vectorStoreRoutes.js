@@ -19,6 +19,17 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
     const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
     const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
 
+    // -------------------------------------------------------------
+    // FIX: Wipe the database clean before uploading the new document
+    // -------------------------------------------------------------
+    try {
+      await pineconeIndex.deleteAll();
+      console.log("Successfully cleared previous document from Pinecone.");
+    } catch (clearError) {
+      console.warn("Could not clear index (it might already be empty):", clearError);
+    }
+    // -------------------------------------------------------------
+
     parser = new PDFParse({ data: new Uint8Array(req.file.buffer) });
     const { text: rawText } = await parser.getText();
 

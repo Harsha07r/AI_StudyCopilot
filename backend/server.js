@@ -37,20 +37,7 @@ app.get('/ping', (req, res) => {
 });
 
 
-app.post("/chat",async (req,res)=>{
-    try{
-        const {question} =req.body;
-        const response=await model.invoke(question);
-        res.json({
-            reply:response.content,
-        });
-    }  catch(error){
-        console.log(error);
-         res.status(500).json({
-      error: "Something went wrong",
-    });
-    }
-})
+
 
 app.listen(process.env.PORT,()=>{
     console.log(`Server is running on port ${process.env.PORT}`);
