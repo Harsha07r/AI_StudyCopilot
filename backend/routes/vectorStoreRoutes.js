@@ -11,7 +11,7 @@ import { CohereEmbeddings } from "@langchain/cohere";
 import { PineconeStore } from "@langchain/pinecone";
 import { Pinecone } from "@pinecone-database/pinecone";
 
-const router = express.Router();cd ..
+const router = express.Router();
 
 // 1. Configure Multer to store uploaded files in RAM (No disk I/O!)
 const upload = multer({ storage: multer.memoryStorage() });
