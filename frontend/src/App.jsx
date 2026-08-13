@@ -5,22 +5,23 @@ import Navbar from "./components/Navbar";
 import PdfUpload from "./components/PdfUpload";
 import ChatBox from "./components/ChatBox";
 import AnswerBox from "./components/AnswerBox";
-
+import { FileText, Search, Bot } from "lucide-react";
 import "./App.css";
 
 const FEATURES = [
   {
-    icon: "📄",
+    // Use the React component and set a uniform size
+    icon: <FileText size={32} strokeWidth={1.5} />, 
     title: "PDF Upload",
     desc: "Drag and drop any PDF to instantly process and index its content for AI search.",
   },
   {
-    icon: "🔍",
+    icon: <Search size={32} strokeWidth={1.5} />,
     title: "Semantic Search",
     desc: "RAG-powered retrieval finds the most relevant chunks using vector similarity.",
   },
   {
-    icon: "🤖",
+    icon: <Bot size={32} strokeWidth={1.5} />,
     title: "AI Question Answering",
     desc: "Ask natural language questions and get precise answers powered by Groq LLaMA.",
   },
@@ -31,10 +32,10 @@ function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   
-  // State for the AI Chat loading
+  // State for AI Chat loading
   const [loading, setLoading] = useState(false);
   
-  // NEW: State for the PDF Upload process
+  // State for PDF Upload process
   const [isUploading, setIsUploading] = useState(false);
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
@@ -46,36 +47,33 @@ function App() {
     }
 
     try {
-      setIsUploading(true); // 1. Turn on the multi-stage loading UI
+      setIsUploading(true); 
 
       const formData = new FormData();
       formData.append("pdf", pdf);
       
-      const uploadRes = await axios.post(`${BACKEND_URL}/upload`, formData);
-      const { fileName } = uploadRes.data;
+      // Axios automatically sets the correct multipart boundary header
+      const storeRes = await axios.post(`${BACKEND_URL}/store-pdf`, formData);
       
-      await axios.post(`${BACKEND_URL}/store-pdf`, { fileName });
-      
-      // Optional: You can remove this alert now since the UI will naturally 
-      // stop showing the loading state, which implies success.
-      // alert("PDF uploaded successfully"); 
+      if (storeRes.data.success) {
+        console.log("Upload & Processing Complete!");
+      }
       
     } catch (error) {
-      console.log(error);
+      console.error(error);
       alert("Upload failed. Please check your connection and try again.");
     } finally {
-      setIsUploading(false); // 2. Turn off the loading UI when finished (success or fail)
+      setIsUploading(false); // Guarantees the loading UI unfreezes
     }
   };
 
- const handleAsk = async () => {
+  const handleAsk = async () => {
     if (!question) return;
 
     try {
-      setLoading(true); // Turn on the loading state
-      setAnswer(""); // Clear the previous answer
+      setLoading(true);
+      setAnswer("");
 
-      // 1. Use native fetch to keep the connection open for the stream
       const response = await fetch(`${BACKEND_URL}/chat`, {
         method: "POST",
         headers: {
@@ -86,36 +84,33 @@ function App() {
 
       if (!response.ok) throw new Error("Chat request failed");
 
-      // 2. Set up the stream reader
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
 
-      setLoading(false); // Turn off the loading spinner the second the first word arrives
+      setLoading(false);
 
-      // 3. Loop through the incoming data packets
+      let buffer = ""; // Buffer to catch partial SSE chunks across network packets
+
       while (true) {
         const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
         
-        if (done) {
-          break; // The stream is completely finished
-        }
+        // Retain any incomplete chunk in the buffer for the next iteration
+        buffer = lines.pop() || "";
 
-        // Decode the raw bytes into text
-        const chunk = decoder.decode(value, { stream: true });
-
-        // 4. Parse the Server-Sent Events format (data: {...}\n\n)
-        const lines = chunk.split("\n\n");
         for (const line of lines) {
           if (line.startsWith("data: ")) {
-            const dataString = line.replace("data: ", "");
+            const dataString = line.replace("data: ", "").trim();
             
             if (dataString === "[DONE]") {
-              break; // Backend signaled the end
+              break;
             }
             
             try {
               const parsedData = JSON.parse(dataString);
-              // 5. Append the new word to the answer state instantly
               setAnswer((prev) => prev + parsedData.text);
             } catch (e) {
               console.error("Error parsing stream data:", e);
@@ -127,6 +122,7 @@ function App() {
       console.error("Chat error:", error);
       setAnswer("An error occurred while generating the response.");
     } finally {
+      setIsUploading(false);
       setLoading(false);
     }
   };
@@ -157,7 +153,6 @@ function App() {
           ))}
         </div>
 
-        {/* 3. Pass the isUploading state down to the child component! */}
         <PdfUpload 
           pdf={pdf} 
           setPdf={setPdf} 

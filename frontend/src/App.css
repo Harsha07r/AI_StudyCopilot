@@ -604,3 +604,35 @@ body {
   .topnav-brand { font-size: 0.88rem; }
   .card        { padding: 18px 14px; }
 }
+
+
+/* 1. Add a smooth transition to the card itself */
+.feature-card {
+  transition: all 0.3s ease-in-out;
+  border: 1px solid transparent; /* Prevents layout shift on hover */
+}
+
+/* 2. Base styling for the Lucide SVG icon */
+.feature-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #8b5cf6; /* A nice modern purple (adjust to match your brand) */
+  margin-bottom: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Makes the animation feel natural */
+}
+
+/* 3. The Hover State: Lift the card and add a subtle box-shadow */
+.feature-card:hover {
+  transform: translateY(-5px); /* Lifts the card slightly */
+  border-color: rgba(139, 92, 246, 0.3); /* Subtle purple border */
+  box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.2);
+}
+
+/* 4. The Icon Glow: Triggers when the parent card is hovered */
+.feature-card:hover .feature-icon {
+  color: #c084fc; /* Brightens the icon color */
+  transform: scale(1.15); /* Slightly enlarges the icon */
+  /* The drop-shadow filter creates the SVG glow effect */
+  filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.6)); 
+}
