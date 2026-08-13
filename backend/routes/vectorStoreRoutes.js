@@ -2,10 +2,12 @@ import express from "express";
 import multer from "multer";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-
-// We require the package, and safely "unwrap" the default function if Node hid it inside an object
 const pdfParseRaw = require("pdf-parse");
-const pdfParse = pdfParseRaw.default || pdfParseRaw;
+
+// Bulletproof unwrap: forcefully finds the callable function
+const pdfParse = typeof pdfParseRaw === "function" 
+  ? pdfParseRaw 
+  : (typeof pdfParseRaw.default === "function" ? pdfParseRaw.default : pdfParseRaw);
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
 import { PineconeStore } from "@langchain/pinecone";
