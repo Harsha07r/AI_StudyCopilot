@@ -4,6 +4,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
 import { PineconeStore } from "@langchain/pinecone";
 import { Pinecone } from "@pinecone-database/pinecone";
+import { PDFParse } from "pdf-parse";          // <-- ADD THIS
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
