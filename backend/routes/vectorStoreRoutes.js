@@ -1,12 +1,5 @@
 import express from "express";
 import multer from "multer";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const pdfParseModule = require("pdf-parse");
-// Safely grab the extraction function whether Node wrapped it in a default object or not
-const extractPdf = typeof pdfParseModule === "function" ? pdfParseModule : pdfParseModule.default;
-
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
 import { PineconeStore } from "@langchain/pinecone";
@@ -24,11 +17,15 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
       return res.status(400).json({ success: false, error: "No PDF uploaded" });
     }
 
-    // 1. Extract Text
+    // 1. Native Dynamic Import: Bypasses the Node 24 require() corruption entirely
+    const pdfParseModule = await import("pdf-parse");
+    const extractPdf = pdfParseModule.default || pdfParseModule;
+
+    // 2. Extract Text
     const pdfData = await extractPdf(req.file.buffer);
     const rawText = pdfData.text;
 
-    // 2. CRITICAL GUARD: Prevent Pinecone crashes if the PDF is empty or an unreadable image
+    // 3. Safety Guard for Empty Documents
     if (!rawText || rawText.trim() === "") {
       return res.status(400).json({ 
         success: false, 
@@ -36,14 +33,13 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
       });
     }
 
-    // 3. Split Text
+    // 4. Split Text
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
       chunkOverlap: 200,
     });
     const docs = await textSplitter.createDocuments([rawText]);
 
-    // 4. CRITICAL GUARD: Ensure chunks were actually created
     if (docs.length === 0) {
       return res.status(400).json({ success: false, error: "Document splitting generated 0 chunks." });
     }
