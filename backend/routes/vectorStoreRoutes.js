@@ -1,9 +1,11 @@
 import express from "express";
 import multer from "multer";
+import { createRequire } from "module";
 
-// 1. The NEW V2 imports for pdf-parse (and the CanvasFactory to prevent server crashes)
-import { CanvasFactory } from "pdf-parse/worker";
-import { PDFParse } from "pdf-parse";
+const require = createRequire(import.meta.url);
+const pdfParseModule = require("pdf-parse");
+// Safely grab the extraction function whether Node wrapped it in a default object or not
+const extractPdf = typeof pdfParseModule === "function" ? pdfParseModule : pdfParseModule.default;
 
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
@@ -11,11 +13,8 @@ import { PineconeStore } from "@langchain/pinecone";
 import { Pinecone } from "@pinecone-database/pinecone";
 
 const router = express.Router();
-
-// Configure Multer to store uploaded files in RAM
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Initialize Pinecone Client
 const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
 
@@ -25,29 +24,36 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
       return res.status(400).json({ success: false, error: "No PDF uploaded" });
     }
 
-    // 2. The NEW V2 parsing execution
-    const parser = new PDFParse({ 
-      data: req.file.buffer, 
-      CanvasFactory // Required for Node.js environments
-    });
-    
-    const pdfData = await parser.getText();
+    // 1. Extract Text
+    const pdfData = await extractPdf(req.file.buffer);
     const rawText = pdfData.text;
 
-    // 3. Split text into chunks
+    // 2. CRITICAL GUARD: Prevent Pinecone crashes if the PDF is empty or an unreadable image
+    if (!rawText || rawText.trim() === "") {
+      return res.status(400).json({ 
+        success: false, 
+        error: "No readable text found in PDF. Make sure it is not a scanned image." 
+      });
+    }
+
+    // 3. Split Text
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
       chunkOverlap: 200,
     });
     const docs = await textSplitter.createDocuments([rawText]);
 
-    // 4. Generate Embeddings using Cohere
+    // 4. CRITICAL GUARD: Ensure chunks were actually created
+    if (docs.length === 0) {
+      return res.status(400).json({ success: false, error: "Document splitting generated 0 chunks." });
+    }
+
+    // 5. Generate Embeddings & Store
     const embeddings = new CohereEmbeddings({
       apiKey: process.env.COHERE_API_KEY,
       model: "embed-english-v3.0", 
     });
 
-    // 5. Upsert directly to Pinecone Vector Database
     await PineconeStore.fromDocuments(docs, embeddings, {
       pineconeIndex,
       maxConcurrency: 5, 
