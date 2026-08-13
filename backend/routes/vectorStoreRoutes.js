@@ -2,7 +2,6 @@ import express from "express";
 import multer from "multer";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
-import { PineconeStore } from "@langchain/pinecone";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { PDFParse } from "pdf-parse";
 
@@ -36,27 +35,41 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
     });
     const docs = await textSplitter.createDocuments([rawText]);
 
-    if (docs.length === 0) {
+    const texts = docs
+      .map((d) => d.pageContent)
+      .filter((t) => t && t.trim().length > 0);
+
+    if (texts.length === 0) {
       return res.status(400).json({
         success: false,
-        error: "Document splitting generated 0 chunks.",
+        error: "Document splitting generated 0 usable chunks.",
       });
     }
 
     const embeddings = new CohereEmbeddings({
       apiKey: process.env.COHERE_API_KEY,
       model: "embed-english-v3.0",
+      inputType: "search_document",
     });
 
-    await PineconeStore.fromDocuments(docs, embeddings, {
-      pineconeIndex,
-      maxConcurrency: 5,
-    });
+    const vectors = await embeddings.embedDocuments(texts);
+
+    const records = vectors.map((values, i) => ({
+      id: `${Date.now()}-${i}`,
+      values,
+      metadata: { text: texts[i].slice(0, 1000) },
+    }));
+
+    for (let i = 0; i < records.length; i += 100) {
+      await pineconeIndex.upsert(records.slice(i, i + 100));
+    }
+
+    console.log(`Stored ${records.length} vectors in Pinecone`);
 
     return res.status(200).json({
       success: true,
       status: "completed",
-      chunks: docs.length,
+      chunks: records.length,
       message: "Stored in Pinecone successfully!",
     });
   } catch (error) {

@@ -11,7 +11,7 @@ import "./App.css";
 const FEATURES = [
   {
     // Use the React component and set a uniform size
-    icon: <FileText size={32} strokeWidth={1.5} />, 
+    icon: <FileText size={32} strokeWidth={1.5} />,
     title: "PDF Upload",
     desc: "Drag and drop any PDF to instantly process and index its content for AI search.",
   },
@@ -31,14 +31,24 @@ function App() {
   const [pdf, setPdf] = useState(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  
+
   // State for AI Chat loading
   const [loading, setLoading] = useState(false);
-  
+
   // State for PDF Upload process
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState(""); // errors only
+  const [isIndexed, setIsIndexed] = useState(false);
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
+  // Selecting a new file invalidates the previous upload
+  const handleSetPdf = (file) => {
+    setPdf(file);
+    setIsIndexed(false);
+    setUploadStatus("");
+    setAnswer("");
+  };
 
   const handleUpload = async () => {
     if (!pdf) {
@@ -47,28 +57,34 @@ function App() {
     }
 
     try {
-      setIsUploading(true); 
+      setIsUploading(true);
+      setUploadStatus("");
 
       const formData = new FormData();
       formData.append("pdf", pdf);
-      
+
       // Axios automatically sets the correct multipart boundary header
       const storeRes = await axios.post(`${BACKEND_URL}/store-pdf`, formData);
-      
+
       if (storeRes.data.success) {
-        console.log("Upload & Processing Complete!");
+        setIsIndexed(true);
+      } else {
+        setIsIndexed(false);
+        setUploadStatus(storeRes.data.error || "Upload failed.");
       }
-      
     } catch (error) {
-      console.error(error);
-      alert("Upload failed. Please check your connection and try again.");
+      console.error("Server said:", error.response?.data);
+      setIsIndexed(false);
+      setUploadStatus(
+        error.response?.data?.error || "Upload failed. Please try again."
+      );
     } finally {
       setIsUploading(false); // Guarantees the loading UI unfreezes
     }
   };
 
   const handleAsk = async () => {
-    if (!question) return;
+    if (!question || !isIndexed) return;
 
     try {
       setLoading(true);
@@ -97,18 +113,18 @@ function App() {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n\n");
-        
+
         // Retain any incomplete chunk in the buffer for the next iteration
         buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             const dataString = line.replace("data: ", "").trim();
-            
+
             if (dataString === "[DONE]") {
               break;
             }
-            
+
             try {
               const parsedData = JSON.parse(dataString);
               setAnswer((prev) => prev + parsedData.text);
@@ -122,7 +138,6 @@ function App() {
       console.error("Chat error:", error);
       setAnswer("An error occurred while generating the response.");
     } finally {
-      setIsUploading(false);
       setLoading(false);
     }
   };
@@ -153,19 +168,23 @@ function App() {
           ))}
         </div>
 
-        <PdfUpload 
-          pdf={pdf} 
-          setPdf={setPdf} 
-          handleUpload={handleUpload} 
-          isUploading={isUploading} 
+        <PdfUpload
+          pdf={pdf}
+          setPdf={handleSetPdf}
+          handleUpload={handleUpload}
+          isUploading={isUploading}
+          uploadStatus={uploadStatus}
+          isIndexed={isIndexed}
         />
-        
+
         <ChatBox
           question={question}
           setQuestion={setQuestion}
           handleAsk={handleAsk}
           loading={loading}
+          isIndexed={isIndexed}
         />
+
         <AnswerBox answer={answer} />
       </div>
     </>
