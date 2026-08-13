@@ -1,138 +1,150 @@
-PDF-Based Retrieval-Augmented Generation (RAG) System
-A full-stack, offline-capable AI application that allows users to upload PDF documents, automatically extract and process their text, and converse with the document using an advanced Retrieval-Augmented Generation (RAG) pipeline.
+# **StudyCopilot AI: PDF-Based RAG System**
 
-By leveraging local embedding engines, semantic text chunking, and highly efficient similarity search algorithms, this system extracts answers directly from uploaded source material with zero external data leaks and highly reduced token costs.
+**Live Demo:** [https://aistudycopilot.vercel.app/](https://aistudycopilot.vercel.app/)
 
-🚀 Key Features & Capabilities
-End-to-End Ingestion Pipeline: Seamless transition from raw, multi-page PDF binaries to clean, searchable mathematical representations.
+StudyCopilot AI is a full-stack, document-grounded Question-Answering application. It implements a Retrieval-Augmented Generation (RAG) pipeline to extract precise context from uploaded PDF documents and stream answers via a Large Language Model without hallucinations or data leaks.
 
-Multipart File Handling: Robust streaming and temporary storage of local files using a high-performance middleware architecture.
+---
 
-Context-Preserving Tokenization: Intelligent text segmentation that ensures paragraphs are split along syntactic boundaries without tearing sentence meaning.
+## **Architectural Advantages**
 
-Local, Free AI Embeddings: Generates vector representations directly on your host machine—completely bypassing external API usage, pricing limits, and latency spikes.
+* **Zero Disk Footprint:** PDF uploads are buffered directly in system RAM using `multer.memoryStorage()`. The backend extracts raw text in-memory and immediately discards the buffer without writing temporary files to the host file system.
+* **Low-Latency Embeddings:** Embeddings are generated using Cohere's `embed-english-v3.0` model, converting text chunks into 384-dimensional spatial vectors in milliseconds.
+* **Persistent External Vector Storage:** Vector embeddings and chunk metadata are indexed in Pinecone. This decouples vector storage from the application server, ensuring data availability even during host server sleep/restart cycles on free-tier infrastructure.
 
-Semantic Search & Retrieval: Identifies and returns document fragments using conceptual closeness rather than rigid, literal keyword lookups.
+---
 
-Strict Context Constraint: A custom LLM instruction layer forces the conversational agent to reply using only verified documentation fragments, neutralizing hallucinations.
+## **Key Features**
 
-🛠️ Technology Stack
-Backend Engine
-Runtime Environment: Node.js (ECMAScript Modules)
+* **End-to-End Ingestion:** Automated text extraction, chunking, vectorization, and upserting from raw multi-page PDF files.
+* **Context-Preserving Text Chunking:** Utilizes recursive character splitting along natural paragraph and sentence boundaries to retain semantic context across chunk edges.
+* **Semantic Search:** Performs cosine similarity queries against indexed vectors rather than relying on exact keyword matching.
+* **Strict Grounding:** Prompts force the downstream LLM (LLaMA 3.3 70B) to respond strictly using retrieved context chunks, preventing speculative answers.
+* **Streaming Responses:** Implements client-side Server-Sent Events (SSE) handling for real-time response rendering.
 
-Web Framework: Express.js
+---
 
-File Processing: Multer
+## **Tech Stack**
 
-AI & Vector Infrastructure
-Orchestration Framework: LangChain Core & Community Ecosystem
+### **Frontend**
+* **Framework:** React (Vite)
+* **Hosting:** Vercel
+* **HTTP / Streaming:** Axios & Fetch API
 
-Local Embedding Engine: @xenova/transformers (JavaScript port of Hugging Face Transformers)
+### **Backend & API**
+* **Runtime:** Node.js (ES Modules)
+* **Framework:** Express.js
+* **Middleware:** Multer (Memory Storage)
+* **PDF Parsing:** PDF-Parse
 
-Embedding Model: all-MiniLM-L6-v2 (384-dimensional semantic vectors)
+### **AI & Vector Infrastructure**
+* **Orchestration:** LangChain Ecosystem (`@langchain/core`, `@langchain/pinecone`)
+* **Embedding Model:** Cohere (`embed-english-v3.0`)
+* **Vector Database:** Pinecone
+* **Inference Model:** Groq API (`llama-3.3-70b-versatile`)
 
-Database / Indexing: LangChain MemoryVectorStore & ChromaDB Integration
+---
 
-Inference Model: Groq API Cloud Client
+## **System Pipeline Architecture**
 
-📋 System Pipeline Architecture
-The application functions through a strict, unidirectional processing data flow:
+```text
+[ User Uploads PDF ]
+        │
+        ▼
+[ Memory Buffer (Multer) ]
+        │
+        ▼
+[ Text Extraction (pdf-parse) ]
+        │
+        ▼
+[ Recursive Character Splitting ] ─── (1000 char chunks / 200 overlap)
+        │
+        ▼
+[ Vector Embeddings (Cohere API) ]
+        │
+        ▼
+[ Upsert to Pinecone Index ]
+
+---------------------------------------------------------------------
+
+[ User Submits Query ]
+        │
+        ▼
+[ Vector Search (Pinecone) ] ─── (Top-3 Cosine Similarity Match)
+        │
+        ▼
+[ Context Injection Layer ]
+        │
+        ▼
+[ LLM Inference Stream (Groq / LLaMA 3.3) ]
+        │
+        ▼
+[ Real-Time UI Render ]
+Core Pipeline Details
+1. In-Memory Ingestion
+Upon receiving a POST request at /store-pdf, the system initializes a Pinecone client and invokes deleteAll() on the designated index namespace. This resets stale vector state before processing new documents. The incoming file stream is parsed into raw UTF-8 string data directly from memory.
+
+2. Semantic Chunking Strategy
+Raw strings are split using the following parameters:
+
+Chunk Size: 1,000 characters
+
+Chunk Overlap: 200 characters
+
+This chunk boundary overlap prevents context fragmentation when key information spans across contiguous paragraphs.
+
+3. Retrieval & Prompt Structuring
+Incoming user queries are converted into 384-dimensional query vectors and matched against Pinecone records. The top 3 matching text chunks are extracted and wrapped into a system-level context template:
 
 Plaintext
-[ Raw PDF Upload ] 
-       │
-       ▼ (Multer Middleware handles Multipart Stream)
-[ Disks/Upload Storage ] 
-       │
-       ▼ (LangChain PDFLoader extracts text pages)
-[ Extracted Documents ] 
-       │
-       ▼ (Recursive Character Tokenizer splits text)
-[ Optimized Document Chunks ] 
-       │
-       ▼ (Local Transformer Model calculates weights)
-[ 384-Dimensional Vectors ] 
-       │
-       ▼ (Indexed into RAM or Disk-based Stores)
-[ Vector Database ] ◄─── (Similarity Match) ─── [ User Query ]
-       │                                              │
-       ▼ (Extracted Paragraphs)                       │
-[ Prompt Engineering Context Layer ] ◄────────────────┘
-       │
-       ▼ (Invokes Isolated Inference)
-[ Final Human-Readable Answer ]
-🔍 Core Component Breakdown
-1. Document Extraction & Storage Layer
-Traditional web frameworks cannot parse complex file streams out of the box. This layer intercepts binary data streams, saves files securely to disk, and uses a headless PDF compilation mechanism to output individual page elements containing both raw string content and location metadata.
-
-2. Semantic Structural Chunking
-To prevent overwhelming LLM context window spaces and keep billing footprints minimal, documents are divided through a hierarchy of separators (paragraphs, sentences, spaces).
-
-Chunk Size: 1,000 Characters
-
-Chunk Overlap: 200 Characters (Ensures contextual concepts at bounding edges are duplicated across adjacent structures).
-
-3. Vectorization Engine (The Adapter Pattern)
-Rather than passing raw phrases over the web, the system converts chunks into spatial data coordinates using a local instance of the all-MiniLM-L6-v2 neural model. A custom structural Adapter pattern maps your local inference arrays seamlessly into LangChain's uniform abstraction layer, deploying both single-query processing and massive batch execution blocks.
-
-JavaScript
-// Example structural implementation of the local AI adapter
-export class CustomEmbeddings extends Embeddings {
-  async embedDocuments(texts) {
-    const embeddings = [];
-    for (const text of texts) {
-      embeddings.push(await createEmbedding(text));
-    }
-    return embeddings;
-  }
-  async embedQuery(text) {
-    return await createEmbedding(text);
-  }
-}
-4. Memory Indexing & Intelligent Context Retrieval
-Once documents are saved into the Vector Space, user queries act as spatial probes. The data layer parses incoming strings, calculates the query's dimensional properties, and isolates the top 3 nearest historical records using mathematical Cosine Similarity equations.
-
-The application maps, extracts, and stitches these documents together into a single plain-text reference string wrapped inside systemic boundaries:
-
-Plaintext
-You are a study assistant.
-Answer ONLY from the provided context.
+You are a helpful AI assistant. Answer the user's question using ONLY the provided context.
+If the context does not contain the answer, say "I cannot answer this based on the provided document."
 
 Context:
-[Retrieved Document Fragment 1]
-[Retrieved Document Fragment 2]
-[Retrieved Document Fragment 3]
+[Retrieved Chunk 1]
+[Retrieved Chunk 2]
+[Retrieved Chunk 3]
 
 Question: [User Query]
-🛠️ Getting Started & Installation
+Getting Started
 Prerequisites
-Node.js (v18 or higher recommended)
+Node.js v18+
 
-Git
+API keys for Pinecone, Cohere, and Groq
 
 Installation
-Clone the repository down to your local machine:
+Clone the repository:
 
 Bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
+git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git)
 cd YOUR_REPOSITORY_NAME
-Initialize your configurations inside the root server directory by creating a .env file:
+Configure the backend:
+
+Bash
+cd backend
+npm install
+Create a .env file in the backend directory:
 
 Code snippet
 PORT=3000
-GROQ_API_KEY=your_secret_groq_api_key
-Setup your dependencies:
+GROQ_API_KEY=your_groq_api_key
+COHERE_API_KEY=your_cohere_api_key
+PINECONE_API_KEY=your_pinecone_api_key
+PINECONE_INDEX_NAME=your_pinecone_index_name
+Configure the frontend:
 
 Bash
-# Navigate into Backend and install
-cd backend
-npm install
-
-# Navigate into Frontend and install
 cd ../frontend
 npm install
-Run the development application servers:
+Create a .env file in the frontend directory:
+
+Code snippet
+VITE_BACKEND_URL=http://localhost:3000
+Run locally:
 
 Bash
-# From your backend service folder
+# In backend directory
+npm run dev
+
+# In frontend directory
 npm run dev
