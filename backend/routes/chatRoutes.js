@@ -1,5 +1,6 @@
 import express from "express";
 import { retrieveRelevantChunks } from "../services/retrieverService.js";
+import { getActiveNamespace } from "../config/activeDocument.js";
 import { model } from "../config/llm.js";
 
 const router = express.Router();
@@ -12,7 +13,10 @@ router.post("/chat", async (req, res) => {
     const chunks = await retrieveRelevantChunks(question);
 
     if (chunks.length === 0) {
-      return res.status(400).json({ error: "No document uploaded yet. Please upload a PDF first." });
+      const message = getActiveNamespace()
+        ? "That question doesn't seem related to the uploaded document."
+        : "No document uploaded yet. Please upload a PDF first.";
+      return res.status(400).json({ error: message });
     }
 
     const context = chunks.map(doc => doc.pageContent).join("\n\n");
