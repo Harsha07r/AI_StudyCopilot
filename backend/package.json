@@ -12,6 +12,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "dependencies": {
     "@huggingface/inference": "^4.13.18",
     "@langchain/classic": "^1.0.34",
