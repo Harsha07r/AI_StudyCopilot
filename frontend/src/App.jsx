@@ -30,7 +30,7 @@ const FEATURES = [
 function App() {
   const [pdf, setPdf] = useState(null);
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [answer, setAnswer] = useState(null);
 
   // State for AI Chat loading
   const [loading, setLoading] = useState(false);
@@ -47,7 +47,7 @@ function App() {
     setPdf(file);
     setIsIndexed(false);
     setUploadStatus("");
-    setAnswer("");
+    setAnswer(null);
   };
 
   const handleUpload = async () => {
@@ -88,7 +88,7 @@ function App() {
 
     try {
       setLoading(true);
-      setAnswer("");
+      setAnswer(null);
 
       const response = await fetch(`${BACKEND_URL}/chat`, {
         method: "POST",
@@ -98,45 +98,17 @@ function App() {
         body: JSON.stringify({ question }),
       });
 
-      if (!response.ok) throw new Error("Chat request failed");
+      const data = await response.json();
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-
-      setLoading(false);
-
-      let buffer = ""; // Buffer to catch partial SSE chunks across network packets
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-
-        // Retain any incomplete chunk in the buffer for the next iteration
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataString = line.replace("data: ", "").trim();
-
-            if (dataString === "[DONE]") {
-              break;
-            }
-
-            try {
-              const parsedData = JSON.parse(dataString);
-              setAnswer((prev) => prev + parsedData.text);
-            } catch (e) {
-              console.error("Error parsing stream data:", e);
-            }
-          }
-        }
+      if (!response.ok) {
+        setAnswer({ answer: data.error || "Chat request failed.", isAnswerable: false });
+        return;
       }
+
+      setAnswer(data);
     } catch (error) {
       console.error("Chat error:", error);
-      setAnswer("An error occurred while generating the response.");
+      setAnswer({ answer: "An error occurred while generating the response.", isAnswerable: false });
     } finally {
       setLoading(false);
     }
