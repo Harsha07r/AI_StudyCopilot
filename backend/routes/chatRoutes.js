@@ -15,9 +15,10 @@ const AnswerSchema = z.object({
     .describe("True only if the provided context actually contains enough information to answer the question."),
   table: z
     .array(z.array(z.string()))
+    .nullable()
     .optional()
     .describe(
-      "Structured table data if the answer is naturally tabular - the first row is the header row. Omit entirely when a table isn't needed."
+      "Structured table data if the answer is naturally tabular - the first row is the header row. Set to null when a table isn't needed."
     ),
 });
 
