@@ -10,11 +10,17 @@ router.post("/chat", async (req, res) => {
 
     // 1. Retrieve & Build Context (Unchanged)
     const chunks = await retrieveRelevantChunks(question);
+
+    if (chunks.length === 0) {
+      return res.status(400).json({ error: "No document uploaded yet. Please upload a PDF first." });
+    }
+
     const context = chunks.map(doc => doc.pageContent).join("\n\n");
 
     const prompt = `
 You are a study assistant.
 Answer ONLY from the provided context.
+If the context does not contain enough information to answer, say you don't know instead of guessing.
 
 Context:
 ${context}

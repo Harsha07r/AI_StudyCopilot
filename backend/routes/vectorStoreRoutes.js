@@ -4,6 +4,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { PDFParse } from "pdf-parse";
+import { setActiveNamespace } from "../config/activeDocument.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -19,16 +20,10 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
     const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
     const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
 
-    // -------------------------------------------------------------
-    // FIX: Wipe the database clean before uploading the new document
-    // -------------------------------------------------------------
-    try {
-      await pineconeIndex.deleteAll();
-      console.log("Successfully cleared previous document from Pinecone.");
-    } catch (clearError) {
-      console.warn("Could not clear index (it might already be empty):", clearError);
-    }
-    // -------------------------------------------------------------
+    // Each upload gets its own namespace instead of wiping the index,
+    // so previously uploaded documents' vectors are preserved in Pinecone.
+    const namespace = `doc-${Date.now()}`;
+    const namespacedIndex = pineconeIndex.namespace(namespace);
 
     parser = new PDFParse({ data: new Uint8Array(req.file.buffer) });
     const { text: rawText } = await parser.getText();
@@ -72,15 +67,18 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
     }));
 
     for (let i = 0; i < records.length; i += 100) {
-      await pineconeIndex.upsert(records.slice(i, i + 100));
+      await namespacedIndex.upsert(records.slice(i, i + 100));
     }
 
-    console.log(`Stored ${records.length} vectors in Pinecone`);
+    setActiveNamespace(namespace);
+
+    console.log(`Stored ${records.length} vectors in Pinecone namespace "${namespace}"`);
 
     return res.status(200).json({
       success: true,
       status: "completed",
       chunks: records.length,
+      namespace,
       message: "Stored in Pinecone successfully!",
     });
   } catch (error) {
