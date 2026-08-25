@@ -5,8 +5,16 @@ import { getActiveNamespace } from "../config/activeDocument.js";
 
 const CANDIDATE_K = 20;
 const FINAL_K = 3;
-// Cohere relevance scores range 0-1; well below this is generally noise.
-const RERANK_RELEVANCE_THRESHOLD = 0.3;
+// Cohere's rerank score is a relative ranking signal, not a calibrated
+// probability - a genuinely correct match can legitimately score under
+// 0.01 if it lacks strong keyword overlap with the query, so it's unsafe
+// as a hard relevance cutoff (verified against real data: a correct match
+// scored 0.004, below any reasonable rerank threshold). Cosine similarity,
+// by contrast, cleanly separates on-topic from off-topic queries in
+// practice (off-topic queries: ~0.02-0.06; on-topic: ~0.44-0.50), so it's
+// used as the rejection gate instead - reranking is used only to choose
+// and order the best candidates among those that already passed it.
+const COSINE_RELEVANCE_THRESHOLD = 0.3;
 
 // Reranking scores how well a passage matches the literal query text, which
 // breaks down for meta-instructions like "summarize this document" - no
@@ -35,21 +43,22 @@ export const retrieveRelevantChunks = async (query) => {
     namespace,
   });
 
-  // Wide candidate retrieval by vector similarity, then rerank and keep
-  // only the genuinely relevant results - cosine similarity alone always
-  // returns its top-k even when nothing relevant exists, so relevance is
-  // decided by Cohere's rerank score instead of raw vector distance.
-  const candidates = await vectorStore.similaritySearch(query, CANDIDATE_K);
-  if (candidates.length === 0) return [];
+  // Wide candidate retrieval by vector similarity, gated by cosine score
+  // (see COSINE_RELEVANCE_THRESHOLD above for why), then reranked to pick
+  // and order the best few among the candidates that passed the gate.
+  const scored = await vectorStore.similaritySearchWithScore(query, CANDIDATE_K);
+  if (scored.length === 0) return [];
 
-  if (BROAD_QUERY_PATTERN.test(query)) return candidates;
+  const isBroad = BROAD_QUERY_PATTERN.test(query);
+  if (!isBroad && scored[0][1] < COSINE_RELEVANCE_THRESHOLD) return [];
+
+  const candidates = scored.map(([doc]) => doc);
+  if (isBroad) return candidates;
 
   const reranker = new CohereRerank({
     apiKey: process.env.COHERE_API_KEY,
     model: "rerank-english-v3.0",
     topN: FINAL_K,
   });
-  const reranked = await reranker.compressDocuments(candidates, query);
-
-  return reranked.filter((doc) => doc.metadata.relevanceScore >= RERANK_RELEVANCE_THRESHOLD);
+  return await reranker.compressDocuments(candidates, query);
 };
