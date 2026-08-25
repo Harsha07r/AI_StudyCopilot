@@ -3,18 +3,17 @@ import multer from "multer";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { CohereEmbeddings } from "@langchain/cohere";
 import { Pinecone } from "@pinecone-database/pinecone";
-import { PDFParse } from "pdf-parse";
+import { extractPageBlocks, tableToMarkdown } from "../services/pdfTableExtractor.js";
 import { setActiveNamespace } from "../config/activeDocument.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const MAX_TABLE_ROWS_PER_CHUNK = 40;
 
 router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: "No PDF uploaded" });
   }
-
-  let parser;
 
   try {
     const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
@@ -25,10 +24,12 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
     const namespace = `doc-${Date.now()}`;
     const namespacedIndex = pineconeIndex.namespace(namespace);
 
-    parser = new PDFParse({ data: new Uint8Array(req.file.buffer) });
-    const { text: rawText } = await parser.getText();
+    // Layout-aware extraction: tables come back as structured rows instead
+    // of pdf-parse's flattened text, so a chunk boundary never splits a
+    // row and separates a label from its value.
+    const blocks = await extractPageBlocks(req.file.buffer);
 
-    if (!rawText || rawText.trim() === "") {
+    if (blocks.length === 0) {
       return res.status(400).json({
         success: false,
         error: "No readable text found in PDF. Make sure it is not a scanned image.",
@@ -39,13 +40,41 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
       chunkSize: 1000,
       chunkOverlap: 200,
     });
-    const docs = await textSplitter.createDocuments([rawText]);
+    const rawText = blocks
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n\n");
+    const textDocs = rawText.trim()
+      ? (await textSplitter.createDocuments([rawText])).map((d) => ({
+          pageContent: d.pageContent,
+          type: "text",
+        }))
+      : [];
 
-    const texts = docs
-      .map((d) => d.pageContent)
-      .filter((t) => t && t.trim().length > 0);
+    // Tables are kept as atomic chunks so a row is never split mid-way;
+    // large tables are grouped with the header repeated in each group.
+    const tableDocs = blocks
+      .filter((b) => b.type === "table")
+      .flatMap((block) => {
+        const [header, ...body] = block.rows;
+        const rowGroups = [];
+        for (let i = 0; i < body.length; i += MAX_TABLE_ROWS_PER_CHUNK) {
+          rowGroups.push([header, ...body.slice(i, i + MAX_TABLE_ROWS_PER_CHUNK)]);
+        }
+        if (rowGroups.length === 0) rowGroups.push([header]);
 
-    if (texts.length === 0) {
+        return rowGroups.map((rows) => ({
+          pageContent: tableToMarkdown(rows),
+          type: "table",
+          page: block.page,
+        }));
+      });
+
+    const docs = [...textDocs, ...tableDocs].filter(
+      (d) => d.pageContent && d.pageContent.trim().length > 0
+    );
+
+    if (docs.length === 0) {
       return res.status(400).json({
         success: false,
         error: "Document splitting generated 0 usable chunks.",
@@ -58,12 +87,16 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
       inputType: "search_document",
     });
 
-    const vectors = await embeddings.embedDocuments(texts);
+    const vectors = await embeddings.embedDocuments(docs.map((d) => d.pageContent));
 
     const records = vectors.map((values, i) => ({
       id: `${Date.now()}-${i}`,
       values,
-      metadata: { text: texts[i].slice(0, 1000) },
+      metadata: {
+        text: docs[i].pageContent.slice(0, 1000),
+        type: docs[i].type,
+        ...(docs[i].page ? { page: docs[i].page } : {}),
+      },
     }));
 
     for (let i = 0; i < records.length; i += 100) {
@@ -87,8 +120,6 @@ router.post("/store-pdf", upload.single("pdf"), async (req, res) => {
       success: false,
       error: error.message || "Storage Failed",
     });
-  } finally {
-    await parser?.destroy();
   }
 });
 

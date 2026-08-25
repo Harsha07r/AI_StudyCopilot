@@ -1,12 +1,12 @@
-import { CohereEmbeddings } from "@langchain/cohere";
+import { CohereEmbeddings, CohereRerank } from "@langchain/cohere";
 import { PineconeStore } from "@langchain/pinecone";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { getActiveNamespace } from "../config/activeDocument.js";
 
-// Pinecone cosine-similarity scores range roughly 0-1 for normalized
-// embeddings; below this, a chunk is too dissimilar to be a genuine
-// match for the query rather than just the "least bad" of the top-k.
-const SIMILARITY_THRESHOLD = 0.5;
+const CANDIDATE_K = 20;
+const FINAL_K = 3;
+// Cohere relevance scores range 0-1; well below this is generally noise.
+const RERANK_RELEVANCE_THRESHOLD = 0.3;
 
 export const retrieveRelevantChunks = async (query) => {
   const namespace = getActiveNamespace();
@@ -26,13 +26,19 @@ export const retrieveRelevantChunks = async (query) => {
     namespace,
   });
 
-  // Retrieves the top 3 candidate chunks scoped to the active document,
-  // then drops any that aren't actually similar enough to the query -
-  // similaritySearch alone always returns its top-k even when nothing
-  // relevant exists, which is what let out-of-context questions slip
-  // through to the LLM before.
-  const results = await vectorStore.similaritySearchWithScore(query, 3);
-  return results
-    .filter(([, score]) => score >= SIMILARITY_THRESHOLD)
-    .map(([doc]) => doc);
+  // Wide candidate retrieval by vector similarity, then rerank and keep
+  // only the genuinely relevant results - cosine similarity alone always
+  // returns its top-k even when nothing relevant exists, so relevance is
+  // decided by Cohere's rerank score instead of raw vector distance.
+  const candidates = await vectorStore.similaritySearch(query, CANDIDATE_K);
+  if (candidates.length === 0) return [];
+
+  const reranker = new CohereRerank({
+    apiKey: process.env.COHERE_API_KEY,
+    model: "rerank-english-v3.0",
+    topN: FINAL_K,
+  });
+  const reranked = await reranker.compressDocuments(candidates, query);
+
+  return reranked.filter((doc) => doc.metadata.relevanceScore >= RERANK_RELEVANCE_THRESHOLD);
 };
